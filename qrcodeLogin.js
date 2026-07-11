@@ -218,7 +218,11 @@ async function genMode() {
     console.error(`::error::二维码生成失败：${msg}`)
     throw e
   } finally {
-    close_api(api)
+    // 强制关闭 API 服务（加超时防止挂死）
+    await Promise.race([
+      close_api(api),
+      new Promise(r => setTimeout(r, 3000))
+    ])
   }
 }
 
@@ -278,13 +282,16 @@ async function waitMode() {
     }
     saveUserinfo(userinfo)
   } finally {
-    close_api(api)
+    await Promise.race([
+      close_api(api),
+      new Promise(r => setTimeout(r, 3000))
+    ])
   }
 }
 
 const mode = process.argv[2] || 'gen'
 if (mode === 'wait') {
-  waitMode()
+  waitMode().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1) })
 } else {
-  genMode()
+  genMode().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1) })
 }

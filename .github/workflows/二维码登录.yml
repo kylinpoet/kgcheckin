@@ -65,7 +65,8 @@ jobs:
 
       # ════════════════════════════════════════════
       #   步骤一：生成二维码 → PNG + Summary + HTML 登录页
-      # ════════════════════════════════════════════
+      #   ✅ 完成后立即结束 step（process.exit(0) 保证干净退出）
+      #   ════════════════════════════════════════════
       - name: 生成二维码图片与HTML登录页
         id: gen
         run: node qrcodeLogin.js gen
@@ -75,10 +76,10 @@ jobs:
           APPEND_USER: ${{ github.event.inputs.append_user }}
 
       # ════════════════════════════════════════════
-      #   步骤二：立即上传 HTML 登录页 ← 用户下载后浏览器打开直接扫码！
-      # ════════════════════════════════════════════
+      #   步骤二：立即上传 HTML（gen 完成后立即可下载）
+      #   ════════════════════════════════════════════
       - name: 上传二维码 HTML 页面（👈 下载这个！浏览器打开即可扫码）
-        if: ${{ success() && steps.gen.outcome == 'success' && hashFiles('qr/login.html') != '' }}
+        if: ${{ always() && steps.gen.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: 二维码HTML
@@ -88,18 +89,19 @@ jobs:
           retention-days: 1
           if-no-files-found: warn
 
-      # ═══ 备用：单独的 PNG 图片 artifact ═══
+      # ═══ 备用：PNG 图片 ═══
       - name: 上传二维码 PNG 图片
-        if: ${{ success() && steps.gen.outcome == 'success' && hashFiles('qr/*.png') != '' }}
+        if: ${{ always() && steps.gen.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: 二维码PNG
           path: qr/*.png
           retention-days: 1
+          if-no-files-found: warn
 
       # ═══ 错误处理 ═══
       - name: 二维码生成失败提示
-        if: ${{ failure() && steps.gen.outcome == 'failure' }}
+        if: ${{ failure() }}
         run: |
           echo "::error::❌ 二维码生成失败"
           echo ""
@@ -109,9 +111,10 @@ jobs:
 
       # ════════════════════════════════════════════
       #   步骤三：轮询等待用户扫码确认
-      # ════════════════════════════════════════════
+      #   用 always() 确保无论前面怎样都会尝试执行（内部自行判断）
+      #   ════════════════════════════════════════════
       - name: 等待扫码登录
-        if: ${{ success() && steps.gen.outcome == 'success' }}
+        if: ${{ always() }}
         run: node qrcodeLogin.js wait
         env:
           USERINFO: ${{ secrets.USERINFO }}
@@ -120,11 +123,12 @@ jobs:
           PAT: ${{ secrets.PAT }}
           GITHUB_REPOSITORY: ${{ github.repository }}
 
-      # ═══ 兜底：确保所有生成的文件都被保留 ═══
+      # ═══ 兜底 ═══
       - name: 上传全部文件（兜底）
-        if: ${{ always() && hashFiles('qr/*') != '' }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: 二维码全部文件_兜底
           path: qr/
           retention-days: 1
+          if-no-files-found: ignore
